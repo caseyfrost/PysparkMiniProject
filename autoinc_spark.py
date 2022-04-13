@@ -1,4 +1,6 @@
+from audioop import add
 from pyspark import SparkContext
+from operator import add
 
 sc = SparkContext("local", "CarSales")
 raw_rdd = sc.textFile("data.csv")
@@ -23,6 +25,6 @@ enhance_make = vin_kv.groupByKey().flatMap(lambda kv: kv[1]).filter(lambda x: x[
 
 make_kv = enhance_make.map(lambda x: extract_make_key_value(x))
 
-make_kv_count = make_kv.map(lambda x: (x, 1)).reduceByKey(lambda x, y: x+y)
+make_kv_count = make_kv.map(lambda x: (x, 1)).reduceByKey(add)
 
 print(*make_kv_count.collect(), sep='\n')
