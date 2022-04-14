@@ -1,31 +1,41 @@
-from pyspark import SparkContext
+from pyspark.shell import spark
 from operator import add
 
-# create raw rdd
-sc = SparkContext("local", "CarIncidents")
-raw_rdd = sc.textFile("data.csv")
 
-# create KV of vin, (type, make, year)
-def extract_vin_key_value(row):
-    return row[2], (row[1], row[3], row[5])
-
-
-# def populate_make(x):
-#     if x[0] and x[1]:
-#         return x
-
-# extract the make-year
 def extract_make_key_value(x):
     return f'{x[1]}-{x[2]}'
 
 
-vin_kv = raw_rdd.map(lambda x: extract_vin_key_value(x))
+file_location = "data.csv"
+file_type = "csv"
 
-# filter for the I type incidents
-enhance_make = vin_kv.groupByKey().flatMap(lambda kv: kv[1]).filter(lambda x: x[0] == 'I')
+# CSV options
+infer_schema = "false"
+first_row_is_header = "false"
+delimiter = ","
 
-make_kv = enhance_make.map(lambda x: extract_make_key_value(x))
+# The applied options are for CSV files. For other file types, these will be ignored.
+df = spark.read.format(file_type) \
+  .option("inferSchema", infer_schema) \
+  .option("header", first_row_is_header) \
+  .option("sep", delimiter) \
+  .load(file_location)
 
+temp_table = df.createOrReplaceTempView('temp_table')
+
+# select 'I' rows
+df2 = df.where(df._c1 == 'I').select(df._c2, df._c3, df._c4, df._c5)
+
+# select non 'I' rows
+df3 = df.where(df._c1 != 'I')
+
+# join the two dataframes togethre and select a new df where all the fields are populated
+enhance_make = df3.join(df2, ["_c2"], 'left').select('_c1', 'temp_table._c3', 'temp_table._c5')
+
+# extract the make and year as one string
+make_kv = enhance_make.rdd.map(lambda x: extract_make_key_value(x))
+
+# add the extracted make and year to a tuple and sum all tuples by key
 make_kv_count = make_kv.map(lambda x: (x, 1)).reduceByKey(add)
 
 print(*make_kv_count.collect(), sep='\n')
