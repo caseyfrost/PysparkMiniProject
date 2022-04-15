@@ -24,7 +24,6 @@ df = spark.read.format(file_type) \
   .load(file_location)
 
 # select 'I' rows
-# df2 = df.where("SELECT _c2, _c3, _c4, _c5 FROM temp_table WHERE _c1 = 'I'")
 df2 = df.where(df._c1 == 'I').select('_c2', '_c3', '_c4', '_c5')
 
 # select non 'I' rows
