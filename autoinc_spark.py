@@ -1,5 +1,5 @@
-from pyspark.shell import spark
 from operator import add
+from pyspark.sql import SparkSession
 
 
 def extract_make_key_value(x):
@@ -14,6 +14,8 @@ infer_schema = "false"
 first_row_is_header = "false"
 delimiter = ","
 
+spark = SparkSession.builder.appName('CarData').getOrCreate()
+
 # The applied options are for CSV files. For other file types, these will be ignored.
 df = spark.read.format(file_type) \
   .option("inferSchema", infer_schema) \
@@ -21,21 +23,17 @@ df = spark.read.format(file_type) \
   .option("sep", delimiter) \
   .load(file_location)
 
-temp_table = df.createOrReplaceTempView('temp_table')
-
 # select 'I' rows
-df2 = df.where(df._c1 == 'I').select(df._c2, df._c3, df._c4, df._c5)
+# df2 = df.where("SELECT _c2, _c3, _c4, _c5 FROM temp_table WHERE _c1 = 'I'")
+df2 = df.where(df._c1 == 'I').select('_c2', '_c3', '_c4', '_c5')
 
 # select non 'I' rows
 df3 = df.where(df._c1 != 'I')
 
-# join the two dataframes togethre and select a new df where all the fields are populated
-enhance_make = df3.join(df2, ["_c2"], 'left').select('_c1', 'temp_table._c3', 'temp_table._c5')
+enhance_make = df3.alias('df3').join(df2.alias("df2"), ["_c2"], 'left').select('_c1', 'df2._c3', 'df2._c5')
 
-# extract the make and year as one string
 make_kv = enhance_make.rdd.map(lambda x: extract_make_key_value(x))
 
-# add the extracted make and year to a tuple and sum all tuples by key
 make_kv_count = make_kv.map(lambda x: (x, 1)).reduceByKey(add)
 
 print(*make_kv_count.collect(), sep='\n')
